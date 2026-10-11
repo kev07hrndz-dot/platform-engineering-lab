@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests-security:
+    name: Tests and source security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Install test and security tools
+        run: python -m pip install -r requirements-dev.txt
+      - name: Test API, scanner and deployment controls
+        run: python -m pytest -q
+      - name: RepoGuard heuristic scan
+        run: python security/repo_guard.py .
+      - name: Bandit Python security scan
+        run: python -m bandit -q -r app security
+      - name: Audit runtime dependencies (no vulnerability exceptions)
+        run: python -m pip_audit --strict -r requirements.txt
+
+  container-kubernetes:
+    name: Container and Kubernetes security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install checksum-verified validation tools
+        run: |
+          mkdir -p "$RUNNER_TEMP/tools"
+          cd "$RUNNER_TEMP/tools"
+          curl -fsSLo kubeconform.tar.gz https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz
+          echo '9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883  kubeconform.tar.gz' | sha256sum -c -
+          tar -xzf kubeconform.tar.gz kubeconform
+          curl -fsSLo trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v0.75.0/trivy_0.75.0_Linux-64bit.tar.gz
+          echo 'c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f  trivy.tar.gz' | sha256sum -c -
+          tar -xzf trivy.tar.gz trivy
+          echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+      - name: Render and validate Kubernetes schemas
+        run: |
+          kubectl kustomize deploy/kubernetes/base > "$RUNNER_TEMP/manifests.yaml"
+          kubeconform -strict -summary -kubernetes-version 1.35.0 "$RUNNER_TEMP/manifests.yaml"
+      - name: Scan Dockerfile and rendered Kubernetes configuration
+        run: |
+          trivy config --exit-code 1 --severity HIGH,CRITICAL Dockerfile
+          trivy config --exit-code 1 --severity HIGH,CRITICAL "$RUNNER_TEMP/manifests.yaml"
+      - name: Build and smoke-test hardened container
+        run: sh scripts/docker-smoke.sh
+      - name: Report known high and critical image vulnerabilities
+        run: trivy image --scanners vuln --severity HIGH,CRITICAL platform-engineering-lab:dev
+      - name: Fail on fixable high or critical image vulnerabilities
+        run: trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed platform-engineering-lab:dev
