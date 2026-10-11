@@ -7,7 +7,7 @@ app = FastAPI(
 )
 
 
-@app.get("/")
+@app.get("/", summary="Service identity")
 def root():
     return {
         "message": "Platform Engineering Lab API",
@@ -15,11 +15,17 @@ def root():
     }
 
 
-@app.get("/health")
+@app.get("/health", summary="Liveness: process can serve requests")
 def health():
     return {
         "status": "healthy"
     }
+
+
+@app.get("/ready", summary="Readiness: ready to receive traffic")
+def ready():
+    # This stateless demo has no database or external service to check.
+    return {"status": "ready"}
 
 
 @app.get("/info")

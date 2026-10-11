@@ -1,0 +1,36 @@
+# Optional local test pod; intentionally excluded from the application base.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lab-client
+  namespace: platform-lab
+  labels:
+    platform-lab-client: "true"
+spec:
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/os: linux
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: curl
+      image: curlimages/curl:8.21.0
+      imagePullPolicy: IfNotPresent
+      command: [sleep, "3600"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 100m
+          memory: 32Mi

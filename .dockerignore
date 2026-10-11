@@ -5,3 +5,13 @@
 .env
 .env.*
 .DS_Store
+.pytest_cache/
+tests/
+security/
+docs/
+deploy/
+scripts/
+.github/
+README.md
+requirements-dev.txt
+Makefile
