@@ -1,4 +1,4 @@
-FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f
+FROM python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
 
 LABEL org.opencontainers.image.title="Platform Engineering Lab" \
     org.opencontainers.image.description="Stateless FastAPI DevSecOps learning service" \
@@ -8,6 +8,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
+
+# Apply Debian security fixes released after the pinned base image was built.
+RUN apt-get update \
+    && apt-get upgrade --yes --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 # pip and its vendored libraries are build tools; the service does not need them.
