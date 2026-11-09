@@ -1,0 +1,8 @@
+# Pins a release tag for the packaged image without changing the shared base.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../kubernetes/base
+images:
+  - name: platform-engineering-lab
+    newTag: 0.1.0

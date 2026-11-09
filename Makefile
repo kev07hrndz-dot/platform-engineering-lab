@@ -1,8 +1,9 @@
 PYTHON ?= python3
 
 K3D_CLUSTER ?= platform-lab
+ZARF_CLUSTER ?= zarf-lab
 
-.PHONY: check test security k8s docker-smoke k3d-validate k3d-down
+.PHONY: check test security k8s docker-smoke k3d-validate k3d-down zarf-validate zarf-down
 check: test security
 
 test:
@@ -24,3 +25,9 @@ k3d-validate:
 
 k3d-down:
 	k3d cluster delete $(K3D_CLUSTER)
+
+zarf-validate:
+	ZARF_CLUSTER=$(ZARF_CLUSTER) sh scripts/zarf-validate.sh
+
+zarf-down:
+	k3d cluster delete $(ZARF_CLUSTER)

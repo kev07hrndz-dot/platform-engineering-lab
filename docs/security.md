@@ -54,8 +54,10 @@ checks. Never suppress a real secret simply to get a green build. Read the
 - No live cloud provisioning, Terraform state, production cluster, ingress,
   or disaster-recovery design. Kubernetes YAML demonstrates declarative workload
   configuration, not a completed cloud platform.
-- UDS/Zarf packaging and disconnected delivery are roadmap work. Their presence
-  in the README does not imply integration, certification, or an air-gapped test.
+- The Zarf package is validated on a local k3d cluster, with images served only
+  from the in-cluster registry. The package is unsigned, creating it needs
+  internet access, and it has not been tested on a disconnected network. UDS
+  Core integration is roadmap work and no certification is implied.
 
 Network selectors are not identity or authorization. An operator must control
 namespace access and label edits; the policies permit node-originated traffic
