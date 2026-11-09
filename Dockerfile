@@ -2,7 +2,7 @@ FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6
 
 LABEL org.opencontainers.image.title="Platform Engineering Lab" \
     org.opencontainers.image.description="Stateless FastAPI DevSecOps learning service" \
-    org.opencontainers.image.source="https://github.com/kev07hrndz-dot/platform-engineering-lab"
+    org.opencontainers.image.source="https://github.com/km-hernandez/platform-engineering-lab"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1

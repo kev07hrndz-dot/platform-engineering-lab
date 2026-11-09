@@ -1,6 +1,8 @@
 PYTHON ?= python3
 
-.PHONY: check test security k8s docker-smoke
+K3D_CLUSTER ?= platform-lab
+
+.PHONY: check test security k8s docker-smoke k3d-validate k3d-down
 check: test security
 
 test:
@@ -16,3 +18,9 @@ k8s:
 
 docker-smoke:
 	PYTHON=$(PYTHON) sh scripts/docker-smoke.sh
+
+k3d-validate:
+	K3D_CLUSTER=$(K3D_CLUSTER) sh scripts/k3d-validate.sh
+
+k3d-down:
+	k3d cluster delete $(K3D_CLUSTER)
