@@ -94,8 +94,8 @@ kubectl -n platform-lab delete pod lab-client
 ```
 
 The client image (`curlimages/curl`) is pulled from a public registry, so this
-check needs internet access. This is not an air-gapped demo yet; Zarf packaging
-is the step that removes that dependency.
+check needs internet access. The [Zarf package](../zarf/README.md) carries this
+image too, so `make zarf-validate` serves it from the in-cluster registry instead.
 
 ## What the manifests express
 

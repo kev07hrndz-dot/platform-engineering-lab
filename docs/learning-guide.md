@@ -84,10 +84,33 @@ docker compose down
 
 El comando `id` debe mostrar UID 10001. Docker utiliza el puerto 8001 en tu Mac y 8000 dentro del contenedor. El filesystem de solo lectura y las capabilities eliminadas reducen lo que un proceso comprometido puede hacer; no sustituyen las actualizaciones ni una buena configuración del host.
 
+## Fase 2: empaquetar con Zarf
+
+```bash
+make zarf-validate   # construye el paquete, lo despliega en un cluster nuevo y lo prueba
+make zarf-down       # borra el cluster zarf-lab
+```
+
+Qué pasa por dentro:
+
+1. `zarf package create` lee [`zarf.yaml`](../deploy/zarf/zarf.yaml) y mete en un solo archivo `.tar.zst` las imágenes, los manifests y un SBOM por imagen.
+2. `zarf init` instala en el cluster un **registry interno** y un **agente** (un mutating webhook).
+3. `zarf package deploy` sube las imágenes del paquete a ese registry. El agente reescribe cada pod para que use `127.0.0.1:31999/...` en vez de Docker Hub.
+4. El script falla si alguna imagen no viene del registry de Zarf y después corre las mismas pruebas de k3d.
+
+Qué debes saber de memoria:
+
+- **Zarf** empaqueta software y todas sus dependencias para entregarlo en redes desconectadas (air-gapped), como las del DoD. Es un proyecto open source creado por Defense Unicorns.
+- **Paquete Zarf**: un archivo versionado con imágenes, manifests/charts y SBOMs. Se crea con internet y se despliega sin internet.
+- **Init package**: prepara el cluster una sola vez con el registry interno y el agente que reescribe las imágenes.
+- **Componentes**: partes del paquete. `required: true` siempre se instala; los opcionales se eligen con `--components`. Por eso el cliente de pruebas es opcional.
+- **SBOM** (Software Bill of Materials): la lista de todo el software dentro de una imagen. Sirve para responder rápido a un CVE nuevo.
+- **Límite honesto**: el paquete no está firmado y no lo he probado en una red realmente desconectada. La firma es la Fase 4.
+
 ## Qué puedes decir en una entrevista
 
-“Tomé una API FastAPI pequeña y añadí tests, restricciones de contenedor y verificaciones automáticas de seguridad. La estructura Kubernetes usa probes, límites de recursos y políticas de red. Puedo enseñar los archivos y los resultados de CI. Mi siguiente paso es validar el despliegue en un cluster local y después aprender el empaquetado con Zarf y la integración con UDS.”
+“Tomé una API FastAPI pequeña y añadí tests, restricciones de contenedor y verificaciones automáticas de seguridad. La validé en k3d: el script prueba el usuario no root, las capabilities, el filesystem de solo lectura y que la NetworkPolicy permite y bloquea el tráfico correcto. Después la empaqueté con Zarf y la desplegué en un cluster nuevo; el script falla si alguna imagen no viene del registry interno de Zarf. Mi siguiente paso es integrarla con UDS Core y firmar el paquete.”
 
 CI significa **Continuous Integration**: comprobar cada cambio automáticamente. Este proyecto muestra esa parte y los fundamentos para **Continuous Delivery**; todavía no tiene despliegue automático. Kubernetes YAML es configuración declarativa de infraestructura, pero no significa que ya hayas provisionado AWS o trabajado con Terraform.
 
-Sigue el [README principal](../README.md) y la [guía Kubernetes](../deploy/kubernetes/README.md) para avanzar. Cada milestone debe terminar con evidencia observable antes de describirlo como completado.
+Sigue el [README principal](../README.md), la [guía Kubernetes](../deploy/kubernetes/README.md) y la [guía Zarf](../deploy/zarf/README.md) para avanzar. Cada milestone debe terminar con evidencia observable antes de describirlo como completado.

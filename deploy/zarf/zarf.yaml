@@ -1,0 +1,28 @@
+kind: ZarfPackageConfig
+metadata:
+  name: platform-engineering-lab
+  description: Hardened FastAPI service with restricted pod security and default-deny networking
+  version: 0.1.0
+
+components:
+  - name: platform-engineering-lab
+    description: API Deployment, internal Service, restricted namespace, and NetworkPolicies
+    required: true
+    images:
+      - platform-engineering-lab:0.1.0
+    manifests:
+      - name: platform-engineering-lab
+        namespace: platform-lab
+        kustomizations:
+          - overlay
+
+  - name: smoke-client
+    description: Optional labeled curl pod used to prove allowed and denied network paths
+    required: false
+    images:
+      - docker.io/curlimages/curl:8.21.0@sha256:7c12af72ceb38b7432ab85e1a265cff6ae58e06f95539d539b654f2cfa64bb13
+    manifests:
+      - name: smoke-client
+        namespace: platform-lab
+        files:
+          - ../kubernetes/smoke-client.yaml

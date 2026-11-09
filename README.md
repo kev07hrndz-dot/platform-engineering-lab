@@ -11,9 +11,10 @@
 - **CI/security:** GitHub Actions runs tests, RepoGuard, Bandit, dependency audits, container scans, and a Docker smoke test.
 - **Kubernetes/IaC:** declarative Kustomize manifests with probes, resource limits, restricted security contexts, and NetworkPolicy; schema checks in CI.
 - **Runtime proof:** `make k3d-validate` deploys to a local k3d cluster and fails unless the rollout, non-root identity, endpoints, and allowed/denied NetworkPolicy paths all pass.
-- **Next milestone:** package the same application with Zarf and integrate with UDS Core.
+- **Zarf delivery:** `make zarf-validate` builds a versioned Zarf package, deploys it to a fresh k3d cluster, and fails unless every pod image is served from the in-cluster Zarf registry and the same runtime checks pass.
+- **Next milestone:** integrate the package with UDS Core.
 
-**Scope:** this is a learning portfolio. The application, checks, container configuration, and Kubernetes manifests are implemented, and the Kubernetes runtime behavior is validated locally on k3d. UDS/Zarf delivery and AWS/Terraform provisioning are future work. No production, compliance, or air-gap deployment is claimed. Use the linked [Actions runs](https://github.com/km-hernandez/platform-engineering-lab/actions) to inspect the current validation results.
+**Scope:** this is a learning portfolio. The application, checks, container configuration, and Kubernetes manifests are implemented, and the Kubernetes runtime behavior is validated locally on k3d, both directly and from a Zarf package. UDS Core integration and AWS/Terraform provisioning are future work. No production, compliance, or disconnected-network deployment is claimed. Use the linked [Actions runs](https://github.com/km-hernandez/platform-engineering-lab/actions) to inspect the current validation results.
 
 ## Architecture
 
@@ -28,6 +29,10 @@ flowchart LR
     Manifests --> K3d[make k3d-validate / local k3d cluster]
     K3d --> K8s[Kubernetes / ClusterIP service + NetworkPolicy]
     K8s -.-> API
+    Manifests --> Zarf[make zarf-validate / Zarf package]
+    Container --> Zarf
+    Zarf --> Registry[In-cluster Zarf registry]
+    Registry --> K8s
 ```
 
 CI validates changes; it does not publish an image or deploy a cluster. The API has no database, external services at runtime, or privileged infrastructure access.
@@ -90,9 +95,11 @@ Requires Docker, [k3d](https://k3d.io/), and `kubectl`.
 ```bash
 make k3d-validate   # create/reuse the cluster, deploy, and prove runtime controls
 make k3d-down       # delete the local cluster
+make zarf-validate  # build the Zarf package, deploy it to a fresh cluster, and run the same checks
+make zarf-down      # delete the Zarf lab cluster
 ```
 
-The validation builds the image, imports it into k3d without a registry, and checks the rollout, UID 10001 with no capabilities and a read-only root filesystem, real `/health` and `/ready` responses from an allowed client, and that an unlabeled client is blocked. k3s enforces NetworkPolicy with its embedded controller. See the [Kubernetes guide](deploy/kubernetes/README.md) for the manual steps and the last recorded result. `make k8s` only renders the manifests; CI checks their schemas but does not deploy a cluster.
+The validation builds the image, imports it into k3d without a registry, and checks the rollout, UID 10001 with no capabilities and a read-only root filesystem, real `/health` and `/ready` responses from an allowed client, and that an unlabeled client is blocked. k3s enforces NetworkPolicy with its embedded controller. See the [Kubernetes guide](deploy/kubernetes/README.md) for the manual steps and the last recorded result, and the [Zarf guide](deploy/zarf/README.md) for the package layout and its known gaps. `make k8s` only renders the manifests; CI checks their schemas but does not deploy a cluster.
 
 ## API contract
 
@@ -128,6 +135,7 @@ See the [security design](docs/security.md) for assumptions and verification bou
 | Security tooling | [RepoGuard implementation](security/repo_guard.py), [scanner tests](tests/test_repo_guard.py) |
 | CI/CD foundations | [GitHub Actions gates](.github/workflows/ci.yml), [repeatable local commands](Makefile); deployment automation is a next step |
 | Kubernetes and declarative infrastructure | [Kustomize manifests](deploy/kubernetes/), [runtime validation script](scripts/k3d-validate.sh), and the [operating guide](deploy/kubernetes/README.md) |
+| Disconnected-style software delivery | [Zarf package definition](deploy/zarf/zarf.yaml), [package validation script](scripts/zarf-validate.sh), and the [Zarf guide](deploy/zarf/README.md) with known gaps |
 | Threat modeling and technical communication | Security control table above and [Kevin's Spanish learning guide](docs/learning-guide.md) |
 
 Cloud provisioning and Terraform are roadmap items, not demonstrated implementations.
@@ -139,9 +147,9 @@ The next steps build on the same small service instead of adding unrelated tools
 | Step | Deliverable | Evidence needed to call it complete |
 | --- | --- | --- |
 | 1. Prove Kubernetes runtime ✅ | `make k3d-validate` on a local k3d cluster | Done 2026-11-08: ready rollout, real endpoint responses, non-root identity, and allowed/denied network tests |
-| 2. Package with Zarf | A versioned package carrying the image and Kubernetes resources | Package build, artifact inspection, and deployment with required resources available offline |
+| 2. Package with Zarf ✅ | `make zarf-validate` with a versioned package carrying the images and Kubernetes resources | Done 2026-11-09: package build and inspection, deployment to a fresh cluster with images served only from the in-cluster Zarf registry, and the same runtime checks (not yet tested on a disconnected network) |
 | 3. Integrate with UDS Core | Application `Package` custom resource and a small UDS bundle | Successful local integration, verified platform networking/identity/monitoring, and documented version compatibility |
 | 4. Add supply-chain evidence | SBOM, signed artifacts, and verification before deployment | Stored artifacts and a failing verification test for an untrusted artifact |
 | 5. Evaluate cloud IaC | A minimal Terraform AWS environment with a cost/cleanup plan | Reviewed plan, tested apply/destroy, and documented access boundaries |
 
-[Zarf](https://docs.zarf.dev/) packages software and its dependencies for disconnected delivery. [UDS separates delivery from platform integration](https://docs.defenseunicorns.com/core/v1-13/concepts/configuration--packaging/overview/): the UDS Operator reconciles application requirements from custom resources. A [UDS bundle](https://docs.defenseunicorns.com/core/v1-13/concepts/configuration--packaging/bundles/) groups versioned Zarf packages and environment configuration. These are design references for future work; this repository does not yet contain or validate a Zarf package or UDS bundle.
+[Zarf](https://docs.zarf.dev/) packages software and its dependencies for disconnected delivery. [UDS separates delivery from platform integration](https://docs.defenseunicorns.com/core/v1-13/concepts/configuration--packaging/overview/): the UDS Operator reconciles application requirements from custom resources. A [UDS bundle](https://docs.defenseunicorns.com/core/v1-13/concepts/configuration--packaging/bundles/) groups versioned Zarf packages and environment configuration. The [Zarf package](deploy/zarf/) is implemented and validated locally; the UDS `Package` resource and bundle are future work.
