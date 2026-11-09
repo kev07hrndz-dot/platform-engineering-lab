@@ -1,6 +1,6 @@
 # Platform Engineering Lab
 
-[![CI](https://github.com/kev07hrndz-dot/platform-engineering-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/kev07hrndz-dot/platform-engineering-lab/actions/workflows/ci.yml)
+[![CI](https://github.com/km-hernandez/platform-engineering-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/km-hernandez/platform-engineering-lab/actions/workflows/ci.yml)
 
 **A small FastAPI service with a secure delivery workflow and a Kubernetes deployment scaffold.** Built by Kevin Hernandez to demonstrate practical Platform Engineering and DevSecOps decisions through code that is easy to inspect and run.
 
@@ -10,9 +10,10 @@
 - **Containers:** non-root UID 10001, a read-only filesystem, dropped capabilities, and a digest-pinned Python base image.
 - **CI/security:** GitHub Actions runs tests, RepoGuard, Bandit, dependency audits, container scans, and a Docker smoke test.
 - **Kubernetes/IaC:** declarative Kustomize manifests with probes, resource limits, restricted security contexts, and NetworkPolicy; schema checks in CI.
-- **Next milestone:** prove a local Kubernetes rollout, then package the same application with Zarf and integrate with UDS Core.
+- **Runtime proof:** `make k3d-validate` deploys to a local k3d cluster and fails unless the rollout, non-root identity, endpoints, and allowed/denied NetworkPolicy paths all pass.
+- **Next milestone:** package the same application with Zarf and integrate with UDS Core.
 
-**Scope:** this is a learning portfolio. The application, checks, container configuration, and Kubernetes manifests are implemented. Kubernetes runtime validation, UDS/Zarf delivery, and AWS/Terraform provisioning are future work. No production, compliance, or air-gap deployment is claimed. Use the linked [Actions runs](https://github.com/kev07hrndz-dot/platform-engineering-lab/actions) to inspect the current validation results.
+**Scope:** this is a learning portfolio. The application, checks, container configuration, and Kubernetes manifests are implemented, and the Kubernetes runtime behavior is validated locally on k3d. UDS/Zarf delivery and AWS/Terraform provisioning are future work. No production, compliance, or air-gap deployment is claimed. Use the linked [Actions runs](https://github.com/km-hernandez/platform-engineering-lab/actions) to inspect the current validation results.
 
 ## Architecture
 
@@ -24,7 +25,8 @@ flowchart LR
     CI --> Manifests[Kustomize render + kubeconform]
     Container --> Local[Docker Compose / localhost:8001]
     Local --> API[FastAPI / port 8000]
-    Manifests -. cluster rollout next .-> K8s[Kubernetes / ClusterIP service]
+    Manifests --> K3d[make k3d-validate / local k3d cluster]
+    K3d --> K8s[Kubernetes / ClusterIP service + NetworkPolicy]
     K8s -.-> API
 ```
 
@@ -83,7 +85,14 @@ The smoke test uses a separate Compose project and a random local port, then cle
 
 ### Kubernetes
 
-Start with the [Kubernetes guide](deploy/kubernetes/README.md) for rendering, local image setup, deployment, verification, and cleanup. `make k8s` renders the manifests; CI additionally checks their Kubernetes schemas. A render/schema pass does not prove a successful rollout or NetworkPolicy enforcement.
+Requires Docker, [k3d](https://k3d.io/), and `kubectl`.
+
+```bash
+make k3d-validate   # create/reuse the cluster, deploy, and prove runtime controls
+make k3d-down       # delete the local cluster
+```
+
+The validation builds the image, imports it into k3d without a registry, and checks the rollout, UID 10001 with no capabilities and a read-only root filesystem, real `/health` and `/ready` responses from an allowed client, and that an unlabeled client is blocked. k3s enforces NetworkPolicy with its embedded controller. See the [Kubernetes guide](deploy/kubernetes/README.md) for the manual steps and the last recorded result. `make k8s` only renders the manifests; CI checks their schemas but does not deploy a cluster.
 
 ## API contract
 
@@ -105,8 +114,8 @@ Readiness currently has no upstream services to inspect. If a database or depend
 | Unsafe Python code or vulnerable dependencies | Bandit and pip-audit in [CI](.github/workflows/ci.yml); pinned requirements | Static checks and advisory databases are incomplete; pins still need updates |
 | Excessive container privileges | [Dockerfile](Dockerfile) uses UID/GID 10001; [Compose](compose.yaml) drops capabilities, prevents privilege escalation, and uses a read-only root filesystem | Containers share the host kernel; these controls do not provide a complete isolation boundary |
 | Vulnerable or misconfigured images | Digest-pinned base image; Trivy image and configuration checks | Image gate blocks HIGH/CRITICAL vulnerabilities with fixes; unfixed vulnerabilities can remain |
-| Unhealthy workloads or resource exhaustion | [Kubernetes manifests](deploy/kubernetes/) define probes and resource requests/limits | Actual scheduling, rollout, and failure behavior still need cluster validation |
-| Unnecessary cluster/network access | Restricted workload settings, disabled service account token mounting, and NetworkPolicy | NetworkPolicy requires an enforcing CNI; ingress and TLS/authentication need an explicit platform design |
+| Unhealthy workloads or resource exhaustion | [Kubernetes manifests](deploy/kubernetes/) define probes and resource requests/limits; rollout and readiness verified on k3d | Failure behavior under load and multi-node scheduling are not tested |
+| Unnecessary cluster/network access | Restricted workload settings, disabled service account token mounting, and default-deny NetworkPolicy; allowed and denied paths verified on k3d | Verified locally, not in CI; labels are not identities, so RBAC must protect them; ingress and TLS/authentication need an explicit platform design |
 
 See the [security design](docs/security.md) for assumptions and verification boundaries. The API intentionally exposes only demonstration responses. Authentication, authorization, TLS termination, observability, image signing, and a production operational model remain work to do before handling sensitive data or public traffic.
 
@@ -118,7 +127,7 @@ See the [security design](docs/security.md) for assumptions and verification bou
 | Linux/container security | [Dockerfile](Dockerfile), [Compose runtime restrictions](compose.yaml) |
 | Security tooling | [RepoGuard implementation](security/repo_guard.py), [scanner tests](tests/test_repo_guard.py) |
 | CI/CD foundations | [GitHub Actions gates](.github/workflows/ci.yml), [repeatable local commands](Makefile); deployment automation is a next step |
-| Kubernetes and declarative infrastructure | [Kustomize deployment scaffold](deploy/kubernetes/) and its [operating guide](deploy/kubernetes/README.md) |
+| Kubernetes and declarative infrastructure | [Kustomize manifests](deploy/kubernetes/), [runtime validation script](scripts/k3d-validate.sh), and the [operating guide](deploy/kubernetes/README.md) |
 | Threat modeling and technical communication | Security control table above and [Kevin's Spanish learning guide](docs/learning-guide.md) |
 
 Cloud provisioning and Terraform are roadmap items, not demonstrated implementations.
@@ -129,7 +138,7 @@ The next steps build on the same small service instead of adding unrelated tools
 
 | Step | Deliverable | Evidence needed to call it complete |
 | --- | --- | --- |
-| 1. Prove Kubernetes runtime | Deploy the current image in a local test cluster with an enforcing CNI | Ready rollout, real endpoint responses, non-root identity, and allowed/denied network tests |
+| 1. Prove Kubernetes runtime ✅ | `make k3d-validate` on a local k3d cluster | Done 2026-11-08: ready rollout, real endpoint responses, non-root identity, and allowed/denied network tests |
 | 2. Package with Zarf | A versioned package carrying the image and Kubernetes resources | Package build, artifact inspection, and deployment with required resources available offline |
 | 3. Integrate with UDS Core | Application `Package` custom resource and a small UDS bundle | Successful local integration, verified platform networking/identity/monitoring, and documented version compatibility |
 | 4. Add supply-chain evidence | SBOM, signed artifacts, and verification before deployment | Stored artifacts and a failing verification test for an untrusted artifact |
