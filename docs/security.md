@@ -56,8 +56,11 @@ checks. Never suppress a real secret simply to get a green build. Read the
   configuration, not a completed cloud platform.
 - The Zarf package is validated on a local k3d cluster, with images served only
   from the in-cluster registry. The package is unsigned, creating it needs
-  internet access, and it has not been tested on a disconnected network. UDS
-  Core integration is roadmap work and no certification is implied.
+  internet access, and it has not been tested on a disconnected network.
+- UDS Core integration is validated on the local slim dev bundle (Istio and the
+  UDS Operator). On UDS Core, the client is authorized by its ServiceAccount
+  identity over mTLS as well as by NetworkPolicy. Keycloak SSO, monitoring,
+  and logging are not configured. No certification is implied.
 
 Network selectors are not identity or authorization. An operator must control
 namespace access and label edits; the policies permit node-originated traffic

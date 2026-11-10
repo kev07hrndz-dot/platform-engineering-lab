@@ -21,7 +21,7 @@ make zarf-validate
 1. Creates a fresh `zarf-lab` k3d cluster with its own kubeconfig in `build/`;
    your default kubeconfig and current context are left unchanged.
 2. Builds `platform-engineering-lab:0.1.0`, lints the definition, and creates
-   `build/zarf-package-platform-engineering-lab-<arch>-0.1.0.tar.zst`.
+   `build/zarf-package-platform-engineering-lab-<arch>-0.1.0-standalone.tar.zst`.
 3. On first use, downloads the official init package for the installed Zarf
    version into `~/.zarf-cache` and runs `zarf init` (in-cluster registry and
    mutating agent).
@@ -34,11 +34,11 @@ The API image is never imported into this cluster with `k3d image import`, so
 the successful rollout shows that it came from the package. Delete the lab with
 `make zarf-down`.
 
-Last local result (2026-11-09, Zarf v0.89.0, k3d v5.9.0, Kubernetes v1.35.5+k3s1):
+Last local result (2026-11-10, Zarf v0.89.0, k3d v5.9.0, Kubernetes v1.35.5+k3s1):
 
 ```text
-build/zarf-package-platform-engineering-lab-arm64-0.1.0.tar.zst (97M)
-127.0.0.1:31999/curlimages/curl@sha256:7c12af72ceb38b7432ab85e1a265cff6ae58e06f95539d539b654f2cfa64bb13
+build/zarf-package-platform-engineering-lab-arm64-0.1.0-standalone.tar.zst (57M)
+127.0.0.1:31999/curlimages/curl:8.21.0-zarf-2584732664
 127.0.0.1:31999/library/platform-engineering-lab:0.1.0-zarf-3554502284
 UID 10001, no capabilities, read-only root filesystem
 /health -> {"status":"healthy"}
@@ -52,7 +52,18 @@ Zarf validation passed on k3d-zarf-lab (v1.35.5+k3s1): packaged images from the 
 | Component | Required | Contents |
 | --- | --- | --- |
 | `platform-engineering-lab` | Yes | API image and the [Kustomize overlay](overlay/kustomization.yaml), which pins tag `0.1.0` on the shared [base](../kubernetes/base/) |
-| `smoke-client` | No | Digest-pinned `curl` image and the [labeled test pod](../kubernetes/smoke-client.yaml) |
+| `smoke-client` | No | `curl` image and the [labeled test pod with its own ServiceAccount](../kubernetes/smoke-client.yaml) |
+
+The required component has two **flavors**, chosen at build time with
+`zarf package create --flavor`:
+
+- `standalone` (used by `make zarf-validate`): the hand-written default-deny
+  NetworkPolicies. Works on any cluster with a policy controller.
+- `uds` (used by `make uds-validate`): no hand-written policies; the
+  [UDS `Package` CR](../uds/package.yaml) declares the network intent and the
+  UDS Operator generates the policies.
+
+Zarf adds the flavor to the file name, for example `...-0.1.0-uds.tar.zst`.
 
 Optional components keep test tooling out of a normal deployment:
 `zarf package deploy <package> --confirm` installs only the API, and
@@ -61,9 +72,9 @@ Optional components keep test tooling out of a normal deployment:
 ## Inspect the package
 
 ```bash
-zarf package inspect definition build/zarf-package-platform-engineering-lab-*-0.1.0.tar.zst
-zarf package inspect images build/zarf-package-platform-engineering-lab-*-0.1.0.tar.zst
-zarf package inspect sbom build/zarf-package-platform-engineering-lab-*-0.1.0.tar.zst --output build/sbom
+zarf package inspect definition build/zarf-package-platform-engineering-lab-*-0.1.0-standalone.tar.zst
+zarf package inspect images build/zarf-package-platform-engineering-lab-*-0.1.0-standalone.tar.zst
+zarf package inspect sbom build/zarf-package-platform-engineering-lab-*-0.1.0-standalone.tar.zst --output build/sbom
 ```
 
 Zarf generates an SBOM for every packaged image during `zarf package create`.
@@ -75,6 +86,9 @@ Zarf generates an SBOM for every packaged image during `zarf package create`.
   `zarf init` download still need internet access.
 - **Unsigned package.** Zarf warns `package signature not verified`. Signing and
   verification before deployment are roadmap step 4.
+- **curl is tag-pinned.** UDS CLI v0.41.0 cannot bundle a multi-platform
+  image index, so the curl image uses its tag. See the
+  [UDS guide](../uds/README.md#known-gaps).
 - **App image is not digest-pinned.** It is built locally, so `zarf dev lint`
   warns about the missing digest and registry. Publishing the image to a
   registry with a digest is part of step 4.

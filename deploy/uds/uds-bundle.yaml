@@ -1,0 +1,15 @@
+# Groups the UDS flavor of the Zarf package for deployment on a cluster that
+# already runs UDS Core (locally: `uds deploy k3d-core-slim-dev:1.14.3`).
+kind: UDSBundle
+metadata:
+  name: platform-engineering-lab
+  description: Hardened FastAPI service integrated with UDS Core through a Package CR
+  version: 0.1.0
+
+packages:
+  - name: platform-engineering-lab
+    path: ../../build
+    ref: 0.1.0
+    flavor: uds
+    optionalComponents:
+      - smoke-client

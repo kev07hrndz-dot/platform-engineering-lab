@@ -1,0 +1,39 @@
+# UDS Package custom resource: declares what the app needs from the platform.
+# The UDS Operator turns it into NetworkPolicies, Istio AuthorizationPolicies,
+# and an Istio VirtualService on the tenant gateway.
+apiVersion: uds.dev/v1alpha1
+kind: Package
+metadata:
+  name: platform-engineering-lab
+  namespace: platform-lab
+spec:
+  network:
+    serviceMesh:
+      mode: ambient
+    expose:
+      - description: api
+        service: platform-engineering-lab
+        selector:
+          app.kubernetes.io/name: platform-engineering-lab
+        gateway: tenant
+        host: platform-lab
+        port: 8000
+    allow:
+      - description: lab-client-to-api
+        direction: Ingress
+        selector:
+          app.kubernetes.io/name: platform-engineering-lab
+        remoteNamespace: platform-lab
+        remoteSelector:
+          platform-lab-client: "true"
+        # Istio authorizes the mTLS workload identity, not the label.
+        remoteServiceAccount: lab-client
+        port: 8000
+      - description: lab-client-egress-to-api
+        direction: Egress
+        selector:
+          platform-lab-client: "true"
+        remoteNamespace: platform-lab
+        remoteSelector:
+          app.kubernetes.io/name: platform-engineering-lab
+        port: 8000

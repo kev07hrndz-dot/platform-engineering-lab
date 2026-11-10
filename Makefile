@@ -3,7 +3,7 @@ PYTHON ?= python3
 K3D_CLUSTER ?= platform-lab
 ZARF_CLUSTER ?= zarf-lab
 
-.PHONY: check test security k8s docker-smoke k3d-validate k3d-down zarf-validate zarf-down
+.PHONY: check test security k8s docker-smoke k3d-validate k3d-down zarf-validate zarf-down uds-validate uds-down
 check: test security
 
 test:
@@ -31,3 +31,9 @@ zarf-validate:
 
 zarf-down:
 	k3d cluster delete $(ZARF_CLUSTER)
+
+uds-validate:
+	sh scripts/uds-validate.sh
+
+uds-down:
+	k3d cluster delete uds

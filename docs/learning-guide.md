@@ -107,10 +107,33 @@ Qué debes saber de memoria:
 - **SBOM** (Software Bill of Materials): la lista de todo el software dentro de una imagen. Sirve para responder rápido a un CVE nuevo.
 - **Límite honesto**: el paquete no está firmado y no lo he probado en una red realmente desconectada. La firma es la Fase 4.
 
+## Fase 3: integrar con UDS Core
+
+```bash
+make uds-validate   # instala UDS Core (la primera vez) y despliega tu bundle
+make uds-down       # borra el cluster uds
+```
+
+Qué pasa por dentro:
+
+1. `uds deploy k3d-core-slim-dev:1.14.3` crea el cluster `uds` con Zarf, Istio y el UDS Operator.
+2. El paquete Zarf se construye con el flavor `uds`: no lleva tus NetworkPolicies, pero sí el recurso `Package` ([`deploy/uds/package.yaml`](../deploy/uds/package.yaml)).
+3. El UDS Operator lee el `Package` y genera solo 6 NetworkPolicies, 2 AuthorizationPolicies de Istio y la ruta `https://platform-lab.uds.dev`.
+4. El script prueba dos bloqueos con pods nuevos. Un pod sin etiqueta lo bloquea la NetworkPolicy. Un pod con etiqueta pero con otra identidad lo bloquea Istio.
+
+Qué debes saber de memoria:
+
+- **UDS Core** es la plataforma de Defense Unicorns: Istio, Keycloak, monitoreo, logging y políticas sobre Kubernetes. Usamos la versión ligera (slim), con Istio y el operador.
+- **`Package` CR**: tu app declara lo que necesita (exponerse, a quién deja entrar) y el **operador** genera la configuración. Tú declaras la intención, no escribes cada política.
+- **Istio ambient**: service mesh sin sidecars. Un proceso por nodo (**ztunnel**) cifra el tráfico con **mTLS** y verifica la identidad de cada pod.
+- **Etiqueta vs identidad**: una etiqueta la puede cambiar cualquiera con permisos sobre el pod. La identidad de Istio viene del **ServiceAccount** y se prueba con un certificado.
+- **El bug que encontramos**: al quitarle la etiqueta a un pod que ya estaba conectado, seguía llegando. ztunnel reutiliza su túnel HBONE (puerto 15008) y una NetworkPolicy solo bloquea conexiones nuevas. La solución fue autorizar por ServiceAccount (`remoteServiceAccount`).
+- **Límite honesto**: el bundle slim no trae Keycloak ni Prometheus, así que no hay SSO ni métricas todavía.
+
 ## Qué puedes decir en una entrevista
 
-“Tomé una API FastAPI pequeña y añadí tests, restricciones de contenedor y verificaciones automáticas de seguridad. La validé en k3d: el script prueba el usuario no root, las capabilities, el filesystem de solo lectura y que la NetworkPolicy permite y bloquea el tráfico correcto. Después la empaqueté con Zarf y la desplegué en un cluster nuevo; el script falla si alguna imagen no viene del registry interno de Zarf. Mi siguiente paso es integrarla con UDS Core y firmar el paquete.”
+“Tomé una API FastAPI pequeña y añadí tests, restricciones de contenedor y verificaciones automáticas de seguridad. La validé en k3d: el script prueba el usuario no root, las capabilities, el filesystem de solo lectura y que la NetworkPolicy permite y bloquea el tráfico correcto. Después la empaqueté con Zarf y la desplegué en un cluster nuevo; el script falla si alguna imagen no viene del registry interno de Zarf. Luego la integré con UDS Core con un recurso Package: el operador genera las políticas y la ruta en Istio. Al probarlo encontré que en modo ambient quitar una etiqueta no corta una conexión existente, así que autoricé por identidad de ServiceAccount y probé cada capa por separado. Mi siguiente paso es firmar la imagen y el paquete.”
 
 CI significa **Continuous Integration**: comprobar cada cambio automáticamente. Este proyecto muestra esa parte y los fundamentos para **Continuous Delivery**; todavía no tiene despliegue automático. Kubernetes YAML es configuración declarativa de infraestructura, pero no significa que ya hayas provisionado AWS o trabajado con Terraform.
 
-Sigue el [README principal](../README.md), la [guía Kubernetes](../deploy/kubernetes/README.md) y la [guía Zarf](../deploy/zarf/README.md) para avanzar. Cada milestone debe terminar con evidencia observable antes de describirlo como completado.
+Sigue el [README principal](../README.md), la [guía Kubernetes](../deploy/kubernetes/README.md), la [guía Zarf](../deploy/zarf/README.md) y la [guía UDS](../deploy/uds/README.md) para avanzar. Cada milestone debe terminar con evidencia observable antes de describirlo como completado.

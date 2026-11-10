@@ -1,0 +1,29 @@
+# UDS flavor: the UDS Operator generates the namespace's NetworkPolicies from
+# the Package CR (../package.yaml), so the hand-written policies are removed to
+# keep a single source of network intent. Everything else matches the Zarf overlay.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../zarf/overlay
+patches:
+  - patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: default-deny
+        namespace: platform-lab
+  - patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: allow-lab-client-to-api
+        namespace: platform-lab
+  - patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: allow-lab-client-egress
+        namespace: platform-lab

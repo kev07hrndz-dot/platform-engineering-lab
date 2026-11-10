@@ -1,4 +1,13 @@
-# Optional local test pod; intentionally excluded from the application base.
+# Optional local test client; intentionally excluded from the application base.
+# Its own ServiceAccount gives it a workload identity that a service mesh can
+# authorize (UDS Core); the label is what plain NetworkPolicy selects on.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: lab-client
+  namespace: platform-lab
+automountServiceAccountToken: false
+---
 apiVersion: v1
 kind: Pod
 metadata:
@@ -7,6 +16,7 @@ metadata:
   labels:
     platform-lab-client: "true"
 spec:
+  serviceAccountName: lab-client
   automountServiceAccountToken: false
   restartPolicy: Never
   nodeSelector:
@@ -19,7 +29,7 @@ spec:
       type: RuntimeDefault
   containers:
     - name: curl
-      image: docker.io/curlimages/curl:8.21.0@sha256:7c12af72ceb38b7432ab85e1a265cff6ae58e06f95539d539b654f2cfa64bb13
+      image: docker.io/curlimages/curl:8.21.0
       imagePullPolicy: IfNotPresent
       command: [sleep, "3600"]
       securityContext:
