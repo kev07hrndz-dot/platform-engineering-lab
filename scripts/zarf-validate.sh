@@ -33,10 +33,10 @@ k3d kubeconfig write "$cluster" --output "$KUBECONFIG" > /dev/null
 
 echo "==> Building $image and the Zarf package"
 docker build -q -t "$image" . > /dev/null
-"$zarf" dev lint deploy/zarf --log-level warn > /dev/null
-rm -f build/zarf-package-platform-engineering-lab-*-"$version".tar.zst
-"$zarf" package create deploy/zarf --output build --confirm --log-level warn
-package=$(ls build/zarf-package-platform-engineering-lab-*-"$version".tar.zst)
+"$zarf" dev lint deploy/zarf --flavor standalone --log-level warn > /dev/null
+rm -f build/zarf-package-platform-engineering-lab-*-"$version"-standalone.tar.zst
+"$zarf" package create deploy/zarf --flavor standalone --output build --confirm --log-level warn
+package=$(ls build/zarf-package-platform-engineering-lab-*-"$version"-standalone.tar.zst)
 echo "    $package ($(du -h "$package" | cut -f1))"
 "$zarf" package inspect images "$package" | sed 's/^/    /'
 
@@ -48,7 +48,7 @@ if ! k -n zarf get deployment zarf-docker-registry > /dev/null 2>&1; then
         "$zarf" tools download-init --output-directory "$cache" --log-level warn
     fi
     echo "==> Initializing Zarf (registry and mutating agent) in '$cluster'"
-    "$zarf" init --confirm --log-level warn
+    "$zarf" init --confirm --log-level warn > /dev/null
 fi
 
 echo "==> Deploying the package with the optional smoke-client component"
@@ -56,15 +56,7 @@ cleanup
 "$zarf" package deploy "$package" --components=smoke-client --confirm --log-level warn > /dev/null
 k -n "$ns" rollout status deployment/platform-engineering-lab --timeout=120s
 
-echo "==> Checking that every workload image comes from the Zarf registry"
-images=$(k -n "$ns" get pods -o jsonpath='{range .items[*]}{range .spec.containers[*]}{.image}{"\n"}{end}{end}')
-printf '%s\n' "$images" | while read -r ref; do
-    case "$ref" in
-        "$registry"/*) echo "    $ref" ;;
-        *) echo "FAIL: $ref was not rewritten to the Zarf registry" >&2; exit 1 ;;
-    esac
-done
-
+check_registry_images
 run_runtime_checks
 
 server=$(k get nodes -o jsonpath='{.items[0].status.nodeInfo.kubeletVersion}')
