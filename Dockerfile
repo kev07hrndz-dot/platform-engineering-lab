@@ -1,8 +1,8 @@
 FROM python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
 
-LABEL org.opencontainers.image.title="Platform Engineering Lab" \
+LABEL org.opencontainers.image.title="Airgap Exploration" \
     org.opencontainers.image.description="Stateless FastAPI DevSecOps learning service" \
-    org.opencontainers.image.source="https://github.com/km-hernandez/platform-engineering-lab"
+    org.opencontainers.image.source="https://github.com/km-hernandez/airgap-exploration"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
