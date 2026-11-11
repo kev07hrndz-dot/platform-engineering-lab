@@ -1,8 +1,8 @@
-# Platform Engineering Lab
+# Airgap Exploration
 
-[![CI](https://github.com/km-hernandez/platform-engineering-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/km-hernandez/platform-engineering-lab/actions/workflows/ci.yml)
+[![CI](https://github.com/km-hernandez/airgap-exploration/actions/workflows/ci.yml/badge.svg)](https://github.com/km-hernandez/airgap-exploration/actions/workflows/ci.yml)
 
-**A small FastAPI service with a secure delivery workflow and a Kubernetes deployment scaffold.** Built by Kevin Hernandez to demonstrate practical Platform Engineering and DevSecOps decisions through code that is easy to inspect and run.
+**Exploring how software reaches disconnected (air-gapped) Kubernetes environments.** A small FastAPI service, named `platform-engineering-lab` inside the repository, is hardened, packaged with Zarf, and integrated with UDS Core, with a one-command proof at each step. Built by Kevin Hernandez while learning platform engineering and DevSecOps, with code that is easy to inspect and run.
 
 ## Review in 30 seconds
 
@@ -15,7 +15,7 @@
 - **UDS Core integration:** `make uds-validate` deploys the package as a UDS bundle on UDS Core. It fails unless the UDS Operator reconciles the `Package` CR, the app answers through the Istio tenant gateway, and two fresh pods are blocked: one by NetworkPolicy (no label) and one by Istio identity authorization (wrong ServiceAccount).
 - **Next milestone:** sign the image and package, and verify them before deployment.
 
-**Scope:** this is a learning portfolio. The application, checks, container configuration, and Kubernetes manifests are implemented, and the Kubernetes runtime behavior is validated locally on k3d: directly, from a Zarf package, and on UDS Core. Artifact signing and AWS/Terraform provisioning are future work. No production, compliance, or disconnected-network deployment is claimed. Use the linked [Actions runs](https://github.com/km-hernandez/platform-engineering-lab/actions) to inspect the current validation results.
+**Scope:** this is a learning portfolio. The application, checks, container configuration, and Kubernetes manifests are implemented, and the Kubernetes runtime behavior is validated locally on k3d: directly, from a Zarf package, and on UDS Core. Artifact signing and AWS/Terraform provisioning are future work. No production, compliance, or disconnected-network deployment is claimed. Use the linked [Actions runs](https://github.com/km-hernandez/airgap-exploration/actions) to inspect the current validation results.
 
 ## Architecture
 
