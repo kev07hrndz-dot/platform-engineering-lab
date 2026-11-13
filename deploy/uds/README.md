@@ -93,6 +93,7 @@ This is why the base guide says labels are not identities.
   digest of curl's manifest list). The tag stores only the package's platform
   and also cuts the package from 97 MB to 57 MB. Digest pinning returns with
   the signing work in roadmap step 4.
-- **Local only, unsigned, and not tested on a disconnected network**, as with
+- **Local only** (CI runners do not have the memory for UDS Core),
+  **unsigned, and not tested on a disconnected network**, as with
   the [Zarf package](../zarf/README.md#known-gaps). Creating the UDS Core
   cluster pulls packages from `ghcr.io`.

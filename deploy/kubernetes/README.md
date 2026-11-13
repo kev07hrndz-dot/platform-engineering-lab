@@ -3,7 +3,8 @@
 This Kustomize base is a small, declarative deployment scaffold: one API, one
 internal Service, a restricted namespace, and explicit network rules. CI renders
 and validates the manifests. The runtime behavior (rollout, identity, and
-NetworkPolicy enforcement) is verified locally on k3d with one command.
+NetworkPolicy enforcement) is verified on k3d with one command, locally and in
+CI on every pull request.
 
 ## Validate on k3d (one command)
 
