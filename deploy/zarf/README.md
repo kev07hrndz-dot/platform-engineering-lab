@@ -63,6 +63,11 @@ The required component has two **flavors**, chosen at build time with
   [UDS `Package` CR](../uds/package.yaml) declares the network intent and the
   UDS Operator generates the policies.
 
+- `release` (used by the [release workflow](../../.github/workflows/release.yml)):
+  the image published to GHCR, pinned by digest.
+  [`scripts/release-overlay.sh`](../../scripts/release-overlay.sh) writes the
+  overlay, and the image reference is passed with `--set APP_IMAGE=...`.
+
 Zarf adds the flavor to the file name, for example `...-0.1.0-uds.tar.zst`.
 
 Optional components keep test tooling out of a normal deployment:
@@ -79,19 +84,52 @@ zarf package inspect sbom build/zarf-package-platform-engineering-lab-*-0.1.0-st
 
 Zarf generates an SBOM for every packaged image during `zarf package create`.
 
+## Signing and verification
+
+```bash
+make sign-validate
+```
+
+[`scripts/sign-validate.sh`](../../scripts/sign-validate.sh) needs no cluster.
+It signs the package with a throwaway key pair and fails unless every case
+behaves as expected:
+
+| Case | Expected |
+| --- | --- |
+| Signed package, matching public key | Accepted |
+| Unsigned package | Rejected: `not signed` |
+| Signed package, different public key | Rejected: `invalid signature` |
+| Package modified after signing (`zarf.yaml` edited and repacked) | Rejected: `invalid signature` |
+| `zarf package deploy --verify=always` of the unsigned package | Rejected before deployment |
+
+Each rejection must also show the expected reason, so an unrelated error
+cannot pass as a rejection. The throwaway keys are deleted at the end;
+[`scripts/gen-test-key.py`](../../scripts/gen-test-key.py) creates them with
+`zarf tools gen-key`.
+
+Releases do not use a stored key. The
+[release workflow](../../.github/workflows/release.yml) runs on a `vX.Y.Z` tag
+and signs **keylessly**: Sigstore issues a short-lived certificate for the
+workflow's GitHub OIDC identity, and the signature is recorded in the Rekor
+transparency log. The workflow pushes the image to GHCR, signs it by digest
+with cosign, builds the `release` flavor, signs and verifies the package,
+checks that another workflow's identity is rejected, and attaches the package,
+SBOMs, and checksums to a GitHub release.
+
 ## Known gaps
 
 - **Not tested on a disconnected network.** The deploy step used only the
   package and the in-cluster registry. Creating the package and the first
   `zarf init` download still need internet access.
-- **Unsigned package.** Zarf warns `package signature not verified`. Signing and
-  verification before deployment are roadmap step 4.
+- **No release yet.** The release workflow has not run, so no signed image
+  or package is published. The packages built by `make zarf-validate` and
+  `make uds-validate` are unsigned test builds.
 - **curl is tag-pinned.** UDS CLI v0.41.0 cannot bundle a multi-platform
   image index, so the curl image uses its tag. See the
   [UDS guide](../uds/README.md#known-gaps).
-- **App image is not digest-pinned.** It is built locally, so `zarf dev lint`
-  warns about the missing digest and registry. Publishing the image to a
-  registry with a digest is part of step 4.
+- **App image is digest-pinned only in the `release` flavor.** The
+  `standalone` and `uds` flavors use a locally built image, so `zarf dev lint`
+  warns about the missing digest and registry.
 - **Single architecture.** The package is built for the host architecture
   (arm64 here). Use `zarf package create -a amd64` with an amd64 image for
   other clusters.

@@ -38,6 +38,22 @@ components:
         files:
           - ../uds/package.yaml
 
+  # Flavor "release": the image published to a registry, pinned by digest.
+  # Built by the release workflow: scripts/release-overlay.sh writes the overlay
+  # and APP_IMAGE is passed with `zarf package create --set`.
+  - name: platform-engineering-lab
+    description: API Deployment, internal Service, restricted namespace, and NetworkPolicies
+    required: true
+    only:
+      flavor: release
+    images:
+      - "###ZARF_PKG_TMPL_APP_IMAGE###"
+    manifests:
+      - name: platform-engineering-lab
+        namespace: platform-lab
+        kustomizations:
+          - release-overlay
+
   - name: smoke-client
     description: Optional labeled curl pod used to prove allowed and denied network paths
     required: false
