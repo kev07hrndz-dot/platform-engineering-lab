@@ -95,4 +95,6 @@ Zarf generates an SBOM for every packaged image during `zarf package create`.
 - **Single architecture.** The package is built for the host architecture
   (arm64 here). Use `zarf package create -a amd64` with an amd64 image for
   other clusters.
-- **Local only.** CI does not build or deploy the package yet.
+- **Not published.** CI builds the package, deploys it to a temporary k3d
+  cluster, and uploads it with its SBOMs as a workflow artifact, but nothing
+  is pushed to a registry or attached to a release yet.

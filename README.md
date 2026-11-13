@@ -15,7 +15,7 @@
 - **UDS Core integration:** `make uds-validate` deploys the package as a UDS bundle on UDS Core. It fails unless the UDS Operator reconciles the `Package` CR, the app answers through the Istio tenant gateway, and two fresh pods are blocked: one by NetworkPolicy (no label) and one by Istio identity authorization (wrong ServiceAccount).
 - **Next milestone:** sign the image and package, and verify them before deployment.
 
-**Scope:** this is a learning portfolio. The application, checks, container configuration, and Kubernetes manifests are implemented, and the Kubernetes runtime behavior is validated locally on k3d: directly, from a Zarf package, and on UDS Core. Artifact signing and AWS/Terraform provisioning are future work. No production, compliance, or disconnected-network deployment is claimed. Use the linked [Actions runs](https://github.com/km-hernandez/airgap-exploration/actions) to inspect the current validation results.
+**Scope:** this is a learning portfolio. The application, checks, container configuration, and Kubernetes manifests are implemented, and the Kubernetes runtime behavior is validated on k3d: directly and from a Zarf package in CI on every pull request, and on UDS Core locally. Artifact signing and AWS/Terraform provisioning are future work. No production, compliance, or disconnected-network deployment is claimed. Use the linked [Actions runs](https://github.com/km-hernandez/airgap-exploration/actions) to inspect the current validation results.
 
 ## Architecture
 
@@ -39,7 +39,7 @@ flowchart LR
     Mesh -.-> API
 ```
 
-CI validates changes; it does not publish an image or deploy a cluster. The API has no database, external services at runtime, or privileged infrastructure access.
+CI validates every change. Two jobs create a temporary k3d cluster on the runner and run `make k3d-validate` and `make zarf-validate`; the Zarf job uploads the package and its SBOMs as a workflow artifact. CI does not publish an image or deploy to a long-lived cluster, and UDS Core validation runs locally because it needs about 10 GiB of memory. The API has no database, external services at runtime, or privileged infrastructure access.
 
 ## Run locally
 
@@ -105,7 +105,7 @@ make uds-validate   # deploy UDS Core (first run) and the UDS bundle, then prove
 make uds-down       # delete the UDS cluster
 ```
 
-The validation builds the image, imports it into k3d without a registry, and checks the rollout, UID 10001 with no capabilities and a read-only root filesystem, real `/health` and `/ready` responses from an allowed client, and that an unlabeled client is blocked. k3s enforces NetworkPolicy with its embedded controller. See the [Kubernetes guide](deploy/kubernetes/README.md) for the manual steps and the last recorded result, the [Zarf guide](deploy/zarf/README.md) for the package layout, and the [UDS guide](deploy/uds/README.md) for the generated policies. Each guide lists its known gaps. `make k8s` only renders the manifests; CI checks their schemas but does not deploy a cluster.
+The validation builds the image, imports it into k3d without a registry, and checks the rollout, UID 10001 with no capabilities and a read-only root filesystem, real `/health` and `/ready` responses from an allowed client, and that an unlabeled client is blocked. k3s enforces NetworkPolicy with its embedded controller. See the [Kubernetes guide](deploy/kubernetes/README.md) for the manual steps and the last recorded result, the [Zarf guide](deploy/zarf/README.md) for the package layout, and the [UDS guide](deploy/uds/README.md) for the generated policies. Each guide lists its known gaps. `make k8s` only renders the manifests. CI checks their schemas and also runs the k3d and Zarf validations on a temporary cluster.
 
 ## API contract
 
@@ -128,7 +128,7 @@ Readiness currently has no upstream services to inspect. If a database or depend
 | Excessive container privileges | [Dockerfile](Dockerfile) uses UID/GID 10001; [Compose](compose.yaml) drops capabilities, prevents privilege escalation, and uses a read-only root filesystem | Containers share the host kernel; these controls do not provide a complete isolation boundary |
 | Vulnerable or misconfigured images | Digest-pinned base image; Trivy image and configuration checks | Image gate blocks HIGH/CRITICAL vulnerabilities with fixes; unfixed vulnerabilities can remain |
 | Unhealthy workloads or resource exhaustion | [Kubernetes manifests](deploy/kubernetes/) define probes and resource requests/limits; rollout and readiness verified on k3d | Failure behavior under load and multi-node scheduling are not tested |
-| Unnecessary cluster/network access | Restricted workload settings, disabled service account token mounting, and default-deny NetworkPolicy; allowed and denied paths verified on k3d. On UDS Core, Istio also authorizes the client's ServiceAccount identity over mTLS | Verified locally, not in CI; labels are not identities, so RBAC must protect them; end-user authentication (Keycloak SSO) is not configured |
+| Unnecessary cluster/network access | Restricted workload settings, disabled service account token mounting, and default-deny NetworkPolicy; allowed and denied paths verified on k3d. On UDS Core, Istio also authorizes the client's ServiceAccount identity over mTLS | NetworkPolicy paths are verified in CI; the Istio identity check is verified locally only; labels are not identities, so RBAC must protect them; end-user authentication (Keycloak SSO) is not configured |
 
 See the [security design](docs/security.md) for assumptions and verification boundaries. The API intentionally exposes only demonstration responses. Authentication, authorization, TLS termination, observability, image signing, and a production operational model remain work to do before handling sensitive data or public traffic.
 
