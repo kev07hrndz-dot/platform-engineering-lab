@@ -1,0 +1,137 @@
+name: Release
+
+# Publishes a signed image and a signed Zarf package for a version tag.
+# Signing is keyless: the workflow's GitHub OIDC identity is bound to each
+# signature through Sigstore, so there is no private key to store or leak.
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+  IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}
+  ISSUER: https://token.actions.githubusercontent.com
+
+jobs:
+  release:
+    name: Signed image and Zarf package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write   # create the GitHub release
+      packages: write   # push the image to GHCR
+      id-token: write   # keyless signing with the workflow identity
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Check that the tag matches the package version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          grep -q "^  version: ${version}\$" deploy/zarf/zarf.yaml \
+            || { echo "Tag $GITHUB_REF_NAME does not match metadata.version in deploy/zarf/zarf.yaml" >&2; exit 1; }
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Install checksum-verified cosign and Zarf
+        run: |
+          mkdir -p "$RUNNER_TEMP/tools"
+          cd "$RUNNER_TEMP/tools"
+          curl -fsSLo cosign https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-amd64
+          echo '424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa  cosign' | sha256sum -c -
+          curl -fsSLo zarf https://github.com/zarf-dev/zarf/releases/download/v0.89.0/zarf_v0.89.0_Linux_amd64
+          echo '0d08597326701d642e42656df109a85bce55a5eb37ef912b830b0e31fa0a6110  zarf' | sha256sum -c -
+          chmod +x cosign zarf
+          echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+
+      - name: Build and smoke-test the image
+        run: |
+          sh scripts/docker-smoke.sh
+          docker tag platform-engineering-lab:dev "$IMAGE:$VERSION"
+
+      - name: Push the image to GHCR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker push --quiet "$IMAGE:$VERSION"
+          ref=$(docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE:$VERSION" | grep "^$IMAGE@sha256:" | head -1)
+          test -n "$ref"
+          echo "IMAGE_REF=$ref" >> "$GITHUB_ENV"
+          echo "Published $ref"
+
+      - name: Sign the image by digest and verify the signature
+        run: |
+          cosign sign --yes "$IMAGE_REF"
+          cosign verify "$IMAGE_REF" \
+            --certificate-identity "$IDENTITY" \
+            --certificate-oidc-issuer "$ISSUER" > /dev/null
+          echo "Verified image signature for $IDENTITY"
+
+      - name: Build the release flavor of the Zarf package
+        run: |
+          sh scripts/release-overlay.sh "$IMAGE_REF"
+          mkdir -p build/release
+          zarf package create deploy/zarf --flavor release --set APP_IMAGE="$IMAGE_REF" \
+            --output build/release --confirm --log-level warn
+          package=$(ls build/release/zarf-package-platform-engineering-lab-*-release.tar.zst)
+          echo "PACKAGE=$package" >> "$GITHUB_ENV"
+          zarf package inspect images "$package" --log-level warn
+
+      - name: Sign the package keylessly and verify the signature
+        run: |
+          token=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sigstore" | jq -r .value)
+          zarf package sign "$PACKAGE" --keyless --identity-token "$token" --confirm --log-level warn
+          zarf package verify "$PACKAGE" \
+            --certificate-identity "$IDENTITY" \
+            --certificate-oidc-issuer "$ISSUER" --log-level warn
+          echo "Verified package signature for $IDENTITY"
+
+      - name: Reject verification against a different identity
+        run: |
+          if zarf package verify "$PACKAGE" \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/ci.yml@${GITHUB_REF}" \
+            --certificate-oidc-issuer "$ISSUER" --log-level warn; then
+            echo "A package signed by release.yml verified as ci.yml" >&2
+            exit 1
+          fi
+          echo "Rejected: the signature does not match another workflow's identity"
+
+      - name: Collect the SBOMs
+        run: |
+          zarf package inspect sbom "$PACKAGE" --output build/release/sbom --log-level warn
+          tar -czf "build/release/sbom-$VERSION.tar.gz" -C build/release sbom
+          (cd build/release && sha256sum "$(basename "$PACKAGE")" "sbom-$VERSION.tar.gz" > "checksums-$VERSION.txt")
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "Image: \`$IMAGE_REF\`"
+            echo
+            echo "Verify the image:"
+            echo '```bash'
+            echo "cosign verify $IMAGE_REF \\"
+            echo "  --certificate-identity $IDENTITY \\"
+            echo "  --certificate-oidc-issuer $ISSUER"
+            echo '```'
+            echo
+            echo "Verify the Zarf package:"
+            echo '```bash'
+            echo "zarf package verify $(basename "$PACKAGE") \\"
+            echo "  --certificate-identity $IDENTITY \\"
+            echo "  --certificate-oidc-issuer $ISSUER"
+            echo '```'
+          } > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            "$PACKAGE" "build/release/sbom-$VERSION.tar.gz" "build/release/checksums-$VERSION.txt"

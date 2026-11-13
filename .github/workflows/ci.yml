@@ -122,3 +122,22 @@ jobs:
             build/sbom/
           if-no-files-found: error
           retention-days: 14
+
+  signature-verification:
+    name: Signature verification (accept and reject)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install checksum-verified Zarf
+        run: |
+          mkdir -p "$RUNNER_TEMP/tools"
+          cd "$RUNNER_TEMP/tools"
+          curl -fsSLo zarf https://github.com/zarf-dev/zarf/releases/download/v0.89.0/zarf_v0.89.0_Linux_amd64
+          echo '0d08597326701d642e42656df109a85bce55a5eb37ef912b830b0e31fa0a6110  zarf' | sha256sum -c -
+          chmod +x zarf
+          echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+      - name: Sign with a throwaway key and prove untrusted packages are rejected
+        run: make sign-validate

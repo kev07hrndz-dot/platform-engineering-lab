@@ -13,7 +13,8 @@
 - **Runtime proof:** `make k3d-validate` deploys to a local k3d cluster and fails unless the rollout, non-root identity, endpoints, and allowed/denied NetworkPolicy paths all pass.
 - **Zarf delivery:** `make zarf-validate` builds a versioned Zarf package, deploys it to a fresh k3d cluster, and fails unless every pod image is served from the in-cluster Zarf registry and the same runtime checks pass.
 - **UDS Core integration:** `make uds-validate` deploys the package as a UDS bundle on UDS Core. It fails unless the UDS Operator reconciles the `Package` CR, the app answers through the Istio tenant gateway, and two fresh pods are blocked: one by NetworkPolicy (no label) and one by Istio identity authorization (wrong ServiceAccount).
-- **Next milestone:** sign the image and package, and verify them before deployment.
+- **Signature verification:** `make sign-validate` signs the package and fails unless an unsigned package, a wrong key, a package modified after signing, and an unsigned deployment are all rejected. It runs in CI on every pull request.
+- **Next milestone:** the first tagged release from the [release workflow](.github/workflows/release.yml), which signs the image and package keylessly.
 
 **Scope:** this is a learning portfolio. The application, checks, container configuration, and Kubernetes manifests are implemented, and the Kubernetes runtime behavior is validated on k3d: directly and from a Zarf package in CI on every pull request, and on UDS Core locally. Artifact signing and AWS/Terraform provisioning are future work. No production, compliance, or disconnected-network deployment is claimed. Use the linked [Actions runs](https://github.com/km-hernandez/airgap-exploration/actions) to inspect the current validation results.
 
@@ -103,6 +104,7 @@ make zarf-validate  # build the Zarf package, deploy it to a fresh cluster, and 
 make zarf-down      # delete the Zarf lab cluster
 make uds-validate   # deploy UDS Core (first run) and the UDS bundle, then prove the integration
 make uds-down       # delete the UDS cluster
+make sign-validate  # sign the package and prove that untrusted packages are rejected (no cluster)
 ```
 
 The validation builds the image, imports it into k3d without a registry, and checks the rollout, UID 10001 with no capabilities and a read-only root filesystem, real `/health` and `/ready` responses from an allowed client, and that an unlabeled client is blocked. k3s enforces NetworkPolicy with its embedded controller. See the [Kubernetes guide](deploy/kubernetes/README.md) for the manual steps and the last recorded result, the [Zarf guide](deploy/zarf/README.md) for the package layout, and the [UDS guide](deploy/uds/README.md) for the generated policies. Each guide lists its known gaps. `make k8s` only renders the manifests. CI checks their schemas and also runs the k3d and Zarf validations on a temporary cluster.
@@ -156,7 +158,7 @@ The next steps build on the same small service instead of adding unrelated tools
 | 1. Prove Kubernetes runtime ✅ | `make k3d-validate` on a local k3d cluster | Done 2026-11-08: ready rollout, real endpoint responses, non-root identity, and allowed/denied network tests |
 | 2. Package with Zarf ✅ | `make zarf-validate` with a versioned package carrying the images and Kubernetes resources | Done 2026-11-09: package build and inspection, deployment to a fresh cluster with images served only from the in-cluster Zarf registry, and the same runtime checks (not yet tested on a disconnected network) |
 | 3. Integrate with UDS Core ✅ | `make uds-validate` with a `Package` CR and a UDS bundle | Done 2026-11-10 on UDS Core 1.14.3 (slim dev): Package `Ready`, operator-generated policies, ingress through the tenant gateway, and separate label and identity denials. Monitoring and SSO need the full Core bundle |
-| 4. Add supply-chain evidence | SBOM, signed artifacts, and verification before deployment | Stored artifacts and a failing verification test for an untrusted artifact |
+| 4. Add supply-chain evidence (in progress) | SBOM, signed artifacts, and verification before deployment | Done 2026-11-12: `make sign-validate` rejects unsigned, wrong-key, and tampered packages in CI, and CI stores the package with its SBOMs. Remaining: the first tagged release, which publishes the image to GHCR and signs the image and package keylessly |
 | 5. Evaluate cloud IaC | A minimal Terraform AWS environment with a cost/cleanup plan | Reviewed plan, tested apply/destroy, and documented access boundaries |
 
 [Zarf](https://docs.zarf.dev/) packages software and its dependencies for disconnected delivery. [UDS separates delivery from platform integration](https://docs.defenseunicorns.com/core/v1-13/concepts/configuration--packaging/overview/): the UDS Operator reconciles application requirements from custom resources. A [UDS bundle](https://docs.defenseunicorns.com/core/v1-13/concepts/configuration--packaging/bundles/) groups versioned Zarf packages and environment configuration. The [Zarf package](deploy/zarf/) and the [UDS `Package` CR and bundle](deploy/uds/) are implemented and validated locally.
